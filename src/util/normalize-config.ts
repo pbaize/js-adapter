@@ -40,7 +40,7 @@ async function loadConfig(config: ExternalConfig): Promise<any> {
    }
 }
 
-export async function normalizeConfig (config: ConnectConfig): Promise<InternalConnectConfig | ExternalConfig> {
+export async function normalizeConfig (config: ConnectConfig): Promise<ConnectConfig> {
     const testThisConfig: ConnectConfig = config;
     if (isExternalConfig(config)) {
         const loadedConfig = await loadConfig(config);
@@ -52,11 +52,11 @@ export async function normalizeConfig (config: ConnectConfig): Promise<InternalC
     return testThisConfig;
 }
 
-export async function validateConfig(config: ConnectConfig) {
+export async function validateConfig(config: ConnectConfig): Promise<InternalConnectConfig> {
     const normalized = await normalizeConfig(config);
     if (isInternalConnectConfig(normalized)) {
         return normalized;
     } else {
-        throw new Error('Invalid Config');
+        throw new Error('Invalid Config: Config must provide a UUID and either a runtime with verion or an address.');
     }
 }

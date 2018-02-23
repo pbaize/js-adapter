@@ -55,23 +55,23 @@ export interface ExistingConnectConfig extends ConfigWithUuid {
     address: string;
 }
 
-export interface ConfigWithRuntime extends BaseConfig {
+export interface NewConnectConfig extends BaseConfig {
     runtime: RuntimeConfig;
+}
+
+export interface ConnectPDConfig extends NewConnectConfig {
+    uuid: string;
 }
 
 export interface ExternalConfig extends BaseConfig {
     manifestUrl: string;
 }
 
-export type NewConnectConfig = ConfigWithUuid & ConfigWithRuntime;
-
-export type PortDiscoveryConfig = (ExternalConfig & ConfigWithRuntime) | NewConnectConfig;
-
 export type ConnectConfig = ExistingConnectConfig | NewConnectConfig | ExternalConfig;
 
-export type InternalConnectConfig = ExistingConnectConfig | NewConnectConfig;
+export type InternalConnectConfig = ExistingConnectConfig | ConnectPDConfig;
 
-export function isExternalConfig(config: ConnectConfig): config is ExternalConfig {
+export function isExternalConfig(config: BaseConfig): config is ExternalConfig {
     if (typeof config.manifestUrl === 'string') {
         return true;
     }
@@ -85,7 +85,7 @@ function hasUuid(config: any): config is ConfigWithUuid {
     return typeof config.uuid === 'string';
 }
 
-function hasRuntimeVersion (config: any): config is ConfigWithRuntime {
+function hasRuntimeVersion (config: any): config is NewConnectConfig {
     return config.runtime && typeof config.runtime.version === 'string';
 }
 
@@ -93,12 +93,12 @@ export function isNewConnectConfig(config: any): config is NewConnectConfig {
     return hasUuid(config) && hasRuntimeVersion(config);
 }
 
-export function isPortDiscoveryConfig(config: any): config is PortDiscoveryConfig {
-    return (isExternalConfig(config) && hasRuntimeVersion(config)) || isNewConnectConfig(config);
+export function isPortDiscoveryConfig(config: any): config is NewConnectConfig {
+    return hasRuntimeVersion(config);
 }
 
 export function isInternalConnectConfig (config: any): config is InternalConnectConfig {
-   return isExistingConnectConfig(config) || isNewConnectConfig(config);
+   return hasUuid(config) && (isExistingConnectConfig(config) || isNewConnectConfig(config));
 }
 
 export enum READY_STATE { // https://github.com/websockets/ws/blob/master/doc/ws.md#ready-state-constants

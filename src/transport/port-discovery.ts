@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as net from 'net';
 import * as path from 'path';
 import * as os from 'os';
-import { NewConnectConfig, PortDiscoveryConfig, isExternalConfig } from './wire';
+import { NewConnectConfig, isExternalConfig } from './wire';
 import Launcher from '../launcher/launcher';
 import Timer = NodeJS.Timer;
 import { setTimeout } from 'timers';
@@ -57,7 +57,7 @@ interface PortDiscoveryMessageEnvolope {
     payload: PortDiscoveryMessage;
 }
 
-function matchRuntimeInstance(config: PortDiscoveryConfig, message: PortDiscoveryMessage): Boolean {
+function matchRuntimeInstance(config: NewConnectConfig, message: PortDiscoveryMessage): Boolean {
     if (config.runtime.version && config.runtime.securityRealm) {
         return config.runtime.version === message.requestedVersion &&
             config.runtime.securityRealm === message.securityRealm;
@@ -177,16 +177,18 @@ function writeUint32(data: Buffer, value: number, offset: number): void {
 }
 
 export class PortDiscovery {
-    private savedConfig: PortDiscoveryConfig;
+    private savedConfig: NewConnectConfig;
     private namedPipeName: string;
     private manifestLocation: string;
     private discoverState: DiscoverState;
     private namedPipeServer: net.Server;
     private pipeConnection: net.Socket; // created by Runtime. only one allowed
     private timeoutTimer: Timer;
+    private randomNum: string;
 
-    constructor(config: PortDiscoveryConfig) {
+    constructor(config: NewConnectConfig) {
         this.savedConfig = Object.assign({}, config);
+        this.randomNum = crypto.randomBytes(16).toString('hex');
     }
 
     // tslint:disable-next-line:no-unused-variable
@@ -224,8 +226,7 @@ export class PortDiscovery {
         return new Promise((resolve, reject) => {
             this.discoverState = DiscoverState.INIT;
             let unix = false;
-            const randomNum: string = crypto.randomBytes(16).toString('hex');
-            this.namedPipeName = 'NodeAdapter.' + randomNum;
+            this.namedPipeName = 'NodeAdapter.' + this.randomNum;
             this.namedPipeServer = net.createServer();
             const pipePath: string = os.platform() === 'win32'
                 ? path.join('\\\\.\\pipe\\', 'chrome.' + this.namedPipeName)
@@ -277,7 +278,7 @@ export class PortDiscovery {
                 this.manifestLocation = this.savedConfig.manifestUrl;
                 resolve();
             } else {
-                const manifestFileName = 'NodeAdapter-' + this.savedConfig.uuid.replace(/ /g, '-') + '.json';
+                const manifestFileName = 'NodeAdapter-' + this.randomNum + '.json';
                 try {
                     fs.mkdirSync(launcher.Installer_Work_Dir);
                 } catch (e) {

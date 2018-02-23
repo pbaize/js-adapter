@@ -23,7 +23,7 @@ export async function connect(config: ConnectConfig): Promise<Fin> {
 export async function launch(config: ConnectConfig): Promise<number> {
    const normalized = await normalizeConfig(config);
    if (!isPortDiscoveryConfig(normalized)) {
-       throw new Error('Invalid Config');
+       throw new Error('Provided config does not have a runtime version. Unable to launch');
    }
    const pd = new PortDiscovery(normalized);
    return pd.retrievePort();
