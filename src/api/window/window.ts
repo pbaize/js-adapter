@@ -2,14 +2,81 @@ import { Bare, Base, RuntimeEvent } from '../base';
 import { Identity } from '../../identity';
 import Bounds from './bounds';
 import BoundsChangedReply from './bounds-changed';
-import Animation from './animation';
+import { Transition, TransitionOptions } from './transition';
 import { Application } from '../application/application';
 import Transport from '../../transport/transport';
 
 // tslint:disable-next-line
 export default class _WindowModule extends Bare {
+    /**
+     * Returns a Window object that represents an existing window.
+     * @param { Identity } indentity
+     * @return {Promise.<_Window>}
+     */
     public wrap(identity: Identity): Promise<_Window> {
         return Promise.resolve(new _Window(this.wire, identity));
+    }
+
+    /**
+     * Creates a new Window.
+     * @param { * } options - Window creation options
+     * @return {Promise.<_Window>}
+     */
+    public create(options: any): Promise<_Window> {
+        return new Promise((resolve, reject) => {
+            const CONSTRUCTOR_CB_TOPIC = 'fire-constructor-callback';
+            const win = new _Window(this.wire, {uuid: this.me.uuid, name: options.name});
+            // need to call pageResponse, otherwise when a child window is created, page is not loaded
+            const pageResponse = new Promise((resolve) => {
+                // tslint:disable-next-line
+                win.on(CONSTRUCTOR_CB_TOPIC, function fireConstructor(response: any) {
+                    let cbPayload;
+                    const success = response.success;
+                    const responseData = response.data;
+                    const message = responseData.message;
+
+                    if (success) {
+                        cbPayload = {
+                            httpResponseCode: responseData.httpResponseCode,
+                            apiInjected: responseData.apiInjected
+                        };
+                    } else {
+                        cbPayload = {
+                            message: responseData.message,
+                            networkErrorCode: responseData.networkErrorCode,
+                            stack: responseData.stack
+                        };
+                    }
+
+                    win.removeListener(CONSTRUCTOR_CB_TOPIC, fireConstructor);
+                    resolve({
+                        message: message,
+                        cbPayload: cbPayload,
+                        success: success
+                    });
+                });
+            });
+
+            const windowCreation = this.wire.environment.createChildWindow(options);
+            Promise.all([pageResponse, windowCreation]).then((resolvedArr: any[]) => {
+                const pageResolve = resolvedArr[0];
+                if (pageResolve.success) {
+                    resolve(win);
+                } else {
+                    reject(pageResolve.message);
+                }
+            });
+
+        });
+    }
+
+    /**
+     * Returns a Window object that represents the current window
+     * @return {Promise.<Window>}
+     * @tutorial window.getCurrent
+     */
+    public getCurrent(): Promise<_Window> {
+        return this.wrap(this.wire.me);
     }
 }
 
@@ -37,6 +104,43 @@ export interface FrameInfo {
 }
 
 /**
+ * @typedef {object} Transition
+ * @property {Opacity} opacity - The Opacity transition
+ * @property {Position} position - The Position transition
+ * @property {Size} size - The Size transition
+*/
+
+/**
+ * @typedef {object} TransitionOptions
+ * @property {boolean} interrupt - This option interrupts the current animation. When false it pushes
+this animation onto the end of the animation queue.
+ * @property {boolean} relative - Treat 'opacity' as absolute or as a delta. Defaults to false.
+ */
+
+/**
+ * @typedef {object} Size
+ * @property {number} duration - The total time in milliseconds this transition should take.
+ * @property {boolean} relative - Treat 'opacity' as absolute or as a delta. Defaults to false.
+ * @property {number} width - Optional if height is present. Defaults to the window's current width.
+ * @property {number} height - Optional if width is present. Defaults to the window's current height.
+ */
+
+/**
+ * @typedef {object} Position
+ * @property {number} duration - The total time in milliseconds this transition should take.
+ * @property {boolean} relative - Treat 'opacity' as absolute or as a delta. Defaults to false.
+ * @property {number} left - Defaults to the window's current left position in virtual screen coordinates.
+ * @property {number} top - Defaults to the window's current top position in virtual screen coordinates.
+ */
+
+/**
+ * @typedef {object} Opacity
+ * @property {number} duration - The total time in milliseconds this transition should take.
+ * @property {boolean} relative - Treat 'opacity' as absolute or as a delta. Defaults to false.
+ * @property {number} opacity - This value is clamped from 0.0 to 1.0.
+*/
+
+/**
  * Bounds is a interface that has the properties of height,
  * width, left, top which are all numbers
  * @typedef { Object } Bounds
@@ -59,7 +163,6 @@ export interface FrameInfo {
 // The window.Window name is taken
 // tslint:disable-next-line
 export class _Window extends Base {
-
     /**
      * Raised when a window within this application requires credentials from the user.
      *
@@ -462,14 +565,13 @@ export class _Window extends Base {
     private windowListFromNameList(nameList: Array<string>): Array<_Window> {
         const windowList: Array<_Window> = [];
 
-        // tslint:disable-next-line
-        for (let i = 0; i < nameList.length; i++) {
+        nameList.forEach(name => {
             windowList.push(new _Window(this.wire, {
                 // tslint:disable-next-line
                 uuid: this.identity.uuid as string,
-                name: nameList[i]
+                name: name
             }));
-        }
+        });
         return windowList;
     }
 
@@ -523,12 +625,17 @@ export class _Window extends Base {
     }
 
     /**
-     * Closes the window
-     * @param { boolean } interrupt assigns the value to flase
-     * @return {Animation}
+     * Performs the specified window transitions.
+     * @param {Transition} transitions - Describes the animations to perform. See the tutorial.
+     * @param {TransitionOptions} options - Options for the animation. See the tutorial.
+     * @return {Promise.<void>}
+     * @tutorial Window.animate
      */
-    public animationBuilder(interrupt: boolean = false): Animation {
-        return new Animation(this.wire, this.identity, interrupt);
+    public animate(transitions: Transition, options: TransitionOptions ): Promise<void> {
+        return this.wire.sendAction('animate-window', Object.assign({}, this.identity, {
+           transitions,
+           options
+        })).then(() => undefined);
     }
 
     /**
@@ -542,7 +649,8 @@ export class _Window extends Base {
 
     /**
      * closes the window application
-     * @param { boolean } force A boolean that is assign to flase
+     * @param { boolean } [force = false] Close will be prevented from closing when force is false and
+     *  ‘close-requested’ has been subscribed to for application’s main window.
      * @return {Promise.<void>}
      * @tutorial Window.close
     */
@@ -616,19 +724,18 @@ export class _Window extends Base {
      * Retrieves an array containing wrapped fin.desktop.Windows that are grouped with this
      * window. If a window is not in a group an empty array is returned. Please note that
      * calling window is included in the result array.
-     * @return {Promise.Array.Array.<_Window>}
+     * @return {Promise.<Array<_Window>>}
      * @tutorial Window.getGroup
      */
-    public getGroup(): Promise<Array<Array<_Window>>> {
+    public getGroup(): Promise<Array<_Window>> {
         return this.wire.sendAction('get-window-group', this.identity).then(({ payload }) => {
             // tslint:disable-next-line
-            let winGroups: Array<Array<_Window>> = [] as Array<Array<_Window>>;
-            // tslint:disable-next-line
-            for (let i = 0; i < payload.data.length; i++) {
-                winGroups[i] = this.windowListFromNameList(payload.data[i]);
-            }
+            let winGroup: Array<_Window> = [] as Array<_Window>;
 
-            return winGroups;
+            if (payload.data.length) {
+                winGroup = this.windowListFromNameList(payload.data);
+            }
+            return winGroup;
         });
     }
 
@@ -743,7 +850,7 @@ export class _Window extends Base {
      * @return {Promise.<void>}
      */
     public mergeGroups(target: _Window): Promise<void> {
-        return this.wire.sendAction('join-window-group', Object.assign({}, this.identity, {
+        return this.wire.sendAction('merge-window-groups', Object.assign({}, this.identity, {
             groupingUuid: target.identity.uuid,
             groupingWindowName: target.identity.name
         })).then(() => undefined);
@@ -845,7 +952,8 @@ export class _Window extends Base {
 
     /**
      * Shows the window if it is hidden.
-     * @param { boolean } force assign the value to flase
+     * @param { boolean } [force = false] Show will be prevented from showing when force is false and
+     *  ‘show-requested’ has been subscribed to for application’s main window.
      * @tutorial Window.show
      * @return {Promise.<void>}
      */
@@ -873,12 +981,21 @@ export class _Window extends Base {
     }
 
     /**
+     * Shows the Chromium Developer Tools
+     * @return {Promise.<void>}
+     * @tutorial Window.showDeveloperTools
+     */
+    public showDeveloperTools(): Promise<void> {
+        return this.wire.sendAction('show-developer-tools', this.identity).then(() => undefined);
+    }
+
+    /**
      * Updates the window using the passed options
      * @param {*} options Changes a window's options that were defined upon creation. See tutorial
      * @return {Promise.<void>}
      */
     public updateOptions(options: any): Promise<void> {
-        return this.wire.sendAction('show-window', Object.assign({}, this.identity, { options })).then(() => undefined);
+        return this.wire.sendAction('update-window-options', Object.assign({}, this.identity, { options })).then(() => undefined);
     }
 
     /**
@@ -947,4 +1064,5 @@ export interface _Window {
     on(type: 'removeListener', listener: (eventType: string) => void): this;
     on(type: 'newListener', listener: (eventType: string) => void): this;
     on(type: 'closed', listener: (eventType: CloseEventShape) => void): this;
+    on(type: 'fire-constructor-callback', listener: Function): this;
 }

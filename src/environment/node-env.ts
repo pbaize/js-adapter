@@ -2,6 +2,7 @@ import { writeFile } from 'fs';
 import { Environment } from './environment';
 import { PortDiscovery } from '../transport/port-discovery';
 import { NewConnectConfig } from '../transport/wire';
+import { NotImplementedError } from '../transport/transport-errors';
 
 export default class NodeEnvironment implements Environment {
     private messageCounter = 0;
@@ -12,7 +13,7 @@ export default class NodeEnvironment implements Environment {
         });
     }
 
-    public retreivePort = (config: NewConnectConfig): Promise<number> => {
+    public retrievePort = (config: NewConnectConfig): Promise<number> => {
         const pd = new PortDiscovery(config);
         return pd.retrievePort();
     }
@@ -20,5 +21,9 @@ export default class NodeEnvironment implements Environment {
     public getNextMessageId = (): any => {
         // tslint:disable-next-line
         return this.messageCounter++;
+    }
+
+    public createChildWindow = (options: any): Promise<any> => {
+        throw new NotImplementedError('Not Implemented');
     }
 }

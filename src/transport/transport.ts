@@ -55,7 +55,7 @@ class Transport extends EventEmitter {
         if (isExistingConnectConfig(config)) {
             return this.connectByPort(config);
         } else if (isNewConnectConfig(config)) {
-            const port = await this.environment.retreivePort(config);
+            const port = await this.environment.retrievePort(config);
             return this.connectByPort(Object.assign({}, config, { address: `ws://localhost:${port}` }));
         }
     }
@@ -172,7 +172,7 @@ class Transport extends EventEmitter {
             if (data.action !== 'ack') {
                 reject(new NoAckError(data.action));
             } else if (!('payload' in data) || !data.payload.success) {
-                reject(new RuntimeError(data.payload));
+                reject(new RuntimeError(data));
             } else {
                 resolve.call(null, data);
             }
