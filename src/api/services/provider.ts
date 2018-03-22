@@ -1,15 +1,13 @@
-declare var require: any;
-
-import { manageReturn, cb } from './util';
 import { ServiceChannel, Action, ServiceIdentity } from './channel';
+import { Transport } from '../../transport/transport';
 
-type ConnectionListener = (adapterIdentity: ServiceIdentity, connectionMessage?: any) => any
+export type ConnectionListener = (adapterIdentity: ServiceIdentity, connectionMessage?: any) => any
 
 export class Provider extends ServiceChannel {
     private connectListener: ConnectionListener;
     private connections: ServiceIdentity[];
 
-    constructor(send) {
+    constructor(send: Transport["sendAction"]) {
         super(send);
         this.connectListener = function () {
             return
@@ -18,7 +16,7 @@ export class Provider extends ServiceChannel {
     }
 
     dispatch(to: ServiceIdentity, action: string, payload: any): Promise<any> {
-        return manageReturn(super.send, this)(to, action, payload);
+        return this.send(to, action, payload);
     }
 
     async processConnection(senderId: ServiceIdentity, payload: any) {
@@ -27,8 +25,7 @@ export class Provider extends ServiceChannel {
     }
    
     publish(action: string, payload: any): Promise<any>[] {
-        const func = manageReturn(super.send, this)
-        return this.connections.map(to => func(to, action, payload));
+        return this.connections.map(to => this.send(to, action, payload));
     }
     
     onConnection(listener: ConnectionListener): void {

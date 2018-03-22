@@ -24,7 +24,7 @@ export interface MessageHandler {
     (data: Function): boolean;
 }
 
-class Transport extends EventEmitter {
+export class Transport extends EventEmitter {
     protected wireListeners: { resolve: Function, reject: Function }[] = [];
     protected uncorrelatedListener: Function;
     protected messageHandlers: MessageHandler[] = [];
@@ -190,7 +190,7 @@ class Transport extends EventEmitter {
 
 export default Transport;
 
-interface Transport {
+export interface Transport {
     sendAction(action: 'request-external-authorization', payload: {}, uncorrelated: true): Promise<Message<AuthorizationPayload>>;
     sendAction<T, U>(action: string, payload: T, uncorrelated: boolean): Promise<Message<U>>;
     topicRefMap: Map<string, number>;

@@ -1,17 +1,16 @@
 declare var require: any;
 
-import { manageReturn, cb, EventListener } from './util';
 import { ServiceChannel, ServiceIdentity, Action } from './channel';
-const addDesktopEventCallback = require('../desktop-messaging.js').addDesktopEventCallback;
+import { Transport } from '../../transport/transport';
 
 export class Client extends ServiceChannel {
 
-    constructor(private identity: ServiceIdentity, send) {
+    constructor(private identity: ServiceIdentity, send: Transport["sendAction"]) {
         super(send)
     }
 
     async dispatch(action: string, payload: any): Promise<any> {
-        return manageReturn(super.send, this)(this.identity, action, payload)
+        return this.send(this.identity, action, payload)
     }
 
     register(action: string, listener: Action): boolean {
@@ -19,12 +18,10 @@ export class Client extends ServiceChannel {
     }
 
     async onServiceDisconnect(listener: EventListener): Promise<void> {
-        return new Promise<void>((resolve, reject) => {
-            addDesktopEventCallback({
+        return addDesktopEventCallback({
                 type: 'service-disconnected',
                 uuid: this.identity.uuid,
                 action: 'application',
-            }, listener, this, resolve, reject)
-        });
+            }, listener, this)
     }
 }

@@ -4,8 +4,8 @@ declare var fin: any;
 declare var require: any;
 
 
-import {cb} from './util';
 import { Identity } from '../../identity';
+import { Transport } from '../../transport/transport';
 
 const sendMessageToDesktop = require('../socket').sendMessageToDesktop;
 
@@ -28,23 +28,15 @@ export class ServiceChannel {
     private postAction: (...args: any[]) => any;
     private errorMiddleware: (...args: any[]) => any;
     private defaultSet: boolean;
+    protected send: (to: Identity, action: string, payload: any) => Promise<void>;
 
-    constructor (send) {
+    constructor (send: Transport["sendAction"]) {
         this.defaultSet = false;
         this.subscriptions = new Map<string, () => any>();
         this.defaultAction = function () {
             throw new Error('listener not implemented')
         }
-        this._send = (to: Identity, action: string, payload: any): Promise<void> => new Promise<void>((resolve, reject) => send('send-service-message', { uuid: to.uuid, name: to.name, action, payload }, (z: any) => resolve(z.result), reject))
-    }
-
-    protected async send (to: Identity, action: string, payload: any, ack: cb, nack: cb) {
-        try {
-           const res = await this._send(to, action, payload);
-           ack(res);
-        } catch (e) {
-           nack(e);
-        }
+        this.send = (to: Identity, action: string, payload: any): Promise<void> => send<void>('send-service-message', { uuid: to.uuid, name: to.name, action, payload });
     }
 
     async processAction(action: string, payload: any, senderIdentity: ServiceIdentity) {
