@@ -1,9 +1,11 @@
 import { WebContents } from '../webcontents/webcontents';
-import Transport from '../../transport/transport';
+import Transport, { Message } from '../../transport/transport';
 import { Identity } from '../../identity';
 import { Base } from '../base';
 import { ViewEvents } from '../events/browserview';
 import { _Window } from '../window/window';
+import { EventEmitter } from 'events';
+import { WindowOption } from '../window/windowOption';
 export interface AutoResizeOptions {
     /**
      * If true, the view's width will grow and shrink together with the window. false
@@ -40,8 +42,18 @@ export interface BrowserViewCreationOptions extends BrowserViewOptions {
         height: number;
     };
 }
-
+const windowRequests = new EventEmitter();
 export class BrowserViewModule extends Base {
+    constructor(wire: Transport) {
+        super(wire);
+        wire.registerMessageHandler((data:Message<{listenerId: string, options: WindowOption}>) => {
+            if (data.action === 'new-window-requested') {
+                const {listenerId, options} = data.payload;
+                windowRequests.emit(listenerId, options)
+                return true;
+            }
+        })
+    }
     public async create(options: BrowserViewCreationOptions) {
         const uuid = this.wire.me.uuid;
         await this.wire.sendAction('create-browser-view' , {...options, uuid});
@@ -91,5 +103,17 @@ export class BrowserView extends WebContents<ViewEvents> {
     public getCurrentWindow = async () => {
         const { payload: { data } } = await this.wire.sendAction<{data: Identity}>('get-view-window', {...this.identity});
         return new _Window(this.wire, data);
+    }
+    /**
+     * setCustomWindowHandler
+     */
+    public setCustomWindowHandler = async (urls: string | string[], handler: (options: WindowOption) => void) => {
+        const patterns = Array.isArray(urls) ? urls : [urls];
+        const { payload: { data } } = await this.wire.sendAction<{ data: { listenerId: string } }>('set-custom-window-handler', { patterns, ...this.identity });
+        const { listenerId } = data;
+        windowRequests.on(listenerId, handler);
+        return () => {
+            windowRequests.removeAllListeners(listenerId);
+        }
     }
 }
